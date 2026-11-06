@@ -1,36 +1,61 @@
-import  { useEffect, useState } from 'react';
-import './App.css'
+import { useMemo, useState } from 'react';
+import { useDinosaurs } from './hooks/useDinosaurs';
+import { useFavorites } from './hooks/useFavorites';
+import { useUrlFilters } from './hooks/useUrlFilters';
+import { filterSpecies } from './lib/species';
+import Header from './components/Header';
+import Filters from './components/Filters';
+import DinoGrid from './components/DinoGrid';
+import DinoModal from './components/DinoModal';
+import Loader from './components/Loader';
+import { EmptyState, ErrorState } from './components/Feedback';
 
-function App() {
-  const [data, setData] = useState([]);
+export default function App() {
+  const { status, species, appearances, reload } = useDinosaurs();
+  const { filters, update, reset } = useUrlFilters();
+  const { favorites, isFavorite, toggle } = useFavorites();
+  const [selected, setSelected] = useState(null);
 
-  useEffect(() => {
-    fetch('https://script.google.com/macros/s/AKfycbydyRvTTgmNfBjmTMWnS3NbeaTSmmR5eVtVTo03K36U46ukShua2sXkM_6IGByAQfI/exec')
-      .then(response => response.json())
-      .then(result => setData(result.data)) // Asegúrate de acceder a la propiedad 'data' si es necesario
-      .catch(error => console.error('Error:', error));
-  }, []);
-   // El array vacío como segundo argumento indica que este efecto se ejecutará solo una vez después de la renderización inicial.
+  const list = useMemo(() => filterSpecies(species, filters, isFavorite), [species, filters, isFavorite]);
 
   return (
-    <div className="App">
-      <h1>Datos de Dinosaurios</h1>
-      <div className="card-container">
-        {data.map((dinosaurio, index) => (
-          <div key={`${dinosaurio.name}-${dinosaurio.Especie}-${dinosaurio["Name Movie"]}-${dinosaurio.type}-${index}`} className="card">
-            <img className='img-thumbnail' src={dinosaurio.image} alt={dinosaurio.name} />
-            <div className="card-content">
-              <h3>{dinosaurio.name}</h3>
-              <p>Especie: {dinosaurio.Especie}</p>
-              <p>Tipo: {dinosaurio.type}</p>
-              <p>Película: {dinosaurio["Name Movie"]}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+    <>
+      <Header species={species.length} appearances={appearances} loading={status !== 'success'} />
+
+      <main className="container main">
+        <Filters
+          filters={filters}
+          onChange={update}
+          onReset={reset}
+          favoritesCount={favorites.length}
+          resultCount={status === 'success' ? list.length : null}
+        />
+
+        {status === 'loading' && <Loader />}
+        {status === 'error' && <ErrorState onRetry={reload} />}
+        {status === 'success' &&
+          (list.length ? (
+            <DinoGrid list={list} isFavorite={isFavorite} onToggleFavorite={toggle} onOpen={setSelected} />
+          ) : (
+            <EmptyState favorites={filters.favorites} onReset={reset} />
+          ))}
+      </main>
+
+      <footer className="footer container">
+        <p>
+          Datos e ilustraciones desde Google Sheets con Apps Script · Hecho por{' '}
+          <a href="https://leofadev.github.io/Portafolio/" target="_blank" rel="noreferrer">Leonardo Pinto</a>
+        </p>
+      </footer>
+
+      {selected && (
+        <DinoModal
+          dino={selected}
+          favorite={isFavorite(selected.id)}
+          onToggleFavorite={() => toggle(selected.id)}
+          onClose={() => setSelected(null)}
+        />
+      )}
+    </>
   );
 }
-
-export default App;
-
